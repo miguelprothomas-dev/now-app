@@ -1,5 +1,4 @@
 export async function handler(event) {
- export async function handler(event) {
   const headers = {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
@@ -7,50 +6,64 @@ export async function handler(event) {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
 
+  // Preflight CORS
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers, body: "" };
   }
 
+  // On veut uniquement POST
   if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
       headers,
-      body: JSON.stringify({ error: "Use POST" }),
+      body: JSON.stringify({ error: "Use POST on /.netlify/functions/now" }),
     };
   }
 
   try {
-    const { goal, category, time, energy } = JSON.parse(event.body || "{}");
+    if (!process.env.OPENAI_API_KEY) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: "OPENAI_API_KEY missing in Netlify env vars" }),
+      };
+    }
+
+    const payload = JSON.parse(event.body || "{}");
+    const goal = String(payload.goal || "").trim();
+    const category = String(payload.category || "").trim();
+    const time = Number(payload.time);
+    const energy = String(payload.energy || "").trim();
 
     if (!goal || !category || !time || !energy) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ error: "Missing fields: goal, category, time, energy" }),
+        body: JSON.stringify({
+          error: "Missing fields (goal, category, time, energy)",
+          received: { goal, category, time, energy },
+        }),
       };
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: "OPENAI_API_KEY missing in Netlify env" }),
-      };
-    }
-
+    // Prompt ULTRA cadré (NOW.)
     const prompt = `
 Tu es NOW. 2.0.
-Tu dois donner UNE seule action faisable MAINTENANT.
-Règles:
-- 1 phrase impérative
-- pas de liste
-- max 18 mots
-- adapté au temps dispo et à l’énergie
+Objectif: donner UNE seule action faisable MAINTENANT.
+
+Contraintes:
+- Une seule phrase impérative
+- Pas de liste, pas d'explication
+- Max 18 mots
+- Adaptée au temps dispo et à l'énergie
+- Très concrète (une action réelle)
+
 Contexte:
-Objectif: ${goal}
-Catégorie: ${category}
-Temps: ${time} minutes
-Énergie: ${energy}
+- Objectif utilisateur: ${goal}
+- Catégorie: ${category}
+- Temps dispo: ${time} minutes
+- Énergie: ${energy}
+
 Réponds uniquement par l'action.
 `.trim();
 
@@ -63,42 +76,51 @@ Réponds uniquement par l'action.
       body: JSON.stringify({
         model: "gpt-4.1-mini",
         input: prompt,
-        temperature: 0.6,
-        max_output_tokens: 60,
+        temperature: 0.7,
+        max_output_tokens: 80,
       }),
     });
 
     const data = await resp.json();
 
+    // Récupère le texte
     const text =
       data.output_text ||
       (data.output?.[0]?.content?.[0]?.text) ||
       "";
 
     if (!resp.ok) {
+      // renvoie l'erreur OpenAI telle quelle (utile si quota/clé)
       return {
-        statusCode: 500,
+        statusCode: resp.status,
         headers,
-        body: JSON.stringify({ error: "OpenAI error", status: resp.status, details: data }),
+        body: JSON.stringify({
+          error: "OpenAI error",
+          status: resp.status,
+          details: data,
+        }),
       };
     }
 
     const action = String(text).trim();
     if (!action) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: "Empty AI response" }) };
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: "Empty AI response", details: data }),
+      };
     }
 
-    return { statusCode: 200, headers, body: JSON.stringify({ action }) };
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ action }),
+    };
   } catch (err) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: String(err) }) };
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: "Server error", details: String(err) }),
+    };
   }
-}
-
-  return {
-    statusCode: 200,
-    body: JSON.stringify({
-      ok: true,
-      message: "Function NOW fonctionne 👍"
-    })
-  };
 }
