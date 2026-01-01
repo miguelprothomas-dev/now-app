@@ -13,22 +13,8 @@
       <p class="tagline">L’app qui te dit quoi faire maintenant.</p>
     </header>
 
-    <!-- ÉCRAN 1 : OBJECTIF -->
-    <section id="screen-goal" class="screen">
-      <label class="label" for="goalInput">Quel est ton objectif ?</label>
-      <input
-        id="goalInput"
-        class="input"
-        type="text"
-        placeholder="Ex : être en forme, apprendre anglais, trouver des clients…"
-        autocomplete="off"
-      />
-      <button id="btnContinue" class="btn primary" type="button">Continuer</button>
-      <p id="goalError" class="error hidden">Entre un objectif (même simple).</p>
-    </section>
-
-    <!-- ÉCRAN 2 : CATÉGORIE (obligatoire) -->
-    <section id="screen-category" class="screen hidden">
+    <!-- ÉCRAN 1 : CATÉGORIE (d'abord) -->
+    <section id="screen-category" class="screen">
       <p class="subtagline">Choisis une catégorie (obligatoire).</p>
 
       <div class="grid">
@@ -41,7 +27,22 @@
       </div>
 
       <button id="btnCatNext" class="btn primary" type="button" disabled>Continuer</button>
-      <button id="btnCatBack" class="btn ghost" type="button">← Retour</button>
+    </section>
+
+    <!-- ÉCRAN 2 : OBJECTIF (après catégorie) -->
+    <section id="screen-goal" class="screen hidden">
+      <label class="label" for="goalInput">Quel est ton objectif dans cette catégorie ?</label>
+      <input
+        id="goalInput"
+        class="input"
+        type="text"
+        placeholder="Ex : courir 2x/semaine, réviser 30 min/jour, trouver 5 prospects…"
+        autocomplete="off"
+      />
+      <button id="btnContinue" class="btn primary" type="button">Continuer</button>
+      <p id="goalError" class="error hidden">Entre un objectif (même simple).</p>
+
+      <button id="btnGoalBack" class="btn ghost" type="button">← Modifier la catégorie</button>
     </section>
 
     <!-- ÉCRAN 3 : TEMPS + ÉNERGIE -->
@@ -65,7 +66,7 @@
       <button id="btnNext" class="btn primary" type="button" disabled>Continuer</button>
       <p id="contextError" class="error hidden">Choisis le temps ET l’énergie.</p>
 
-      <button id="btnBackToCategory" class="btn ghost" type="button">← Modifier la catégorie</button>
+      <button id="btnBackToGoal" class="btn ghost" type="button">← Modifier l’objectif</button>
     </section>
 
     <!-- ÉCRAN 4 : ACTION -->
