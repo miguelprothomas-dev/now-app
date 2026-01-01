@@ -1,7 +1,7 @@
 /* ======================
-   NOW 2.0 — Option A
-   Flow: Category -> Goal -> Context -> Action -> Done
-   IA via /.netlify/functions/now (POST)
+   NOW 2.0 — PRO READY
+   - Category -> Goal (avec suggestions) -> Context -> Action IA
+   - Anti-spam, retry, cache, anti-répétition via historique
 ====================== */
 
 const $ = (id) => document.getElementById(id);
@@ -28,6 +28,7 @@ const btnCatNext = $("btnCatNext");
 
 /* ====== Screen 2: Goal ====== */
 const goalInput = $("goalInput");
+const goalSuggestions = $("goalSuggestions");
 const btnContinue = $("btnContinue");
 const goalError = $("goalError");
 const btnGoalBack = $("btnGoalBack");
@@ -58,15 +59,17 @@ const K = {
   energy: "now_energy",
   currentAction: "now_current_action",
   history: "now_history",
+  cache: "now_cache" // petit cache d’actions (évite trop d’appels)
 };
 
 let state = {
   category: load(K.category, ""),
   goal: load(K.goal, ""),
-  time: load(K.time, null),      // number
-  energy: load(K.energy, ""),    // fatigue | normal | motive
+  time: load(K.time, null),
+  energy: load(K.energy, ""),
   currentAction: load(K.currentAction, ""),
   history: load(K.history, []),
+  cache: load(K.cache, {}) // clé = JSON.stringify(context) ; valeur = [actions]
 };
 
 function persist() {
@@ -76,6 +79,7 @@ function persist() {
   save(K.energy, state.energy);
   save(K.currentAction, state.currentAction);
   save(K.history, state.history);
+  save(K.cache, state.cache);
 }
 
 /* ====== UI helpers ====== */
@@ -124,29 +128,58 @@ const CAT_LABEL = {
   social: "Social & Relations",
 };
 
+const GOAL_SUGGESTIONS = {
+  health: ["Reprendre le sport", "Perdre un peu de poids", "Être plus en forme", "Mieux dormir"],
+  study: ["Réviser", "Apprendre l’anglais", "Comprendre un cours", "Mémoriser un chapitre"],
+  work: ["Trouver des clients", "Avancer sur un dossier", "Faire un devis", "Planifier la semaine"],
+  home: ["Ranger", "Faire le ménage", "Organiser mes papiers", "Préparer la journée"],
+  creative: ["Créer un post", "Monter une vidéo", "Trouver des idées", "Écrire un script"],
+  social: ["Répondre à quelqu’un", "Prendre des nouvelles", "Planifier une sortie", "Envoyer un message important"],
+};
+
+function refreshGoalSuggestions() {
+  goalSuggestions.innerHTML = "";
+  const list = GOAL_SUGGESTIONS[state.category] || [];
+  list.forEach(txt => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.textContent = txt;
+    b.addEventListener("click", () => {
+      goalInput.value = txt;
+      goalInput.focus();
+      setGoalError(false);
+    });
+    goalSuggestions.appendChild(b);
+  });
+}
+
 function fallbackAction() {
   return `Avance sur "${state.goal}" pendant ${state.time} minutes, sans distraction.`;
 }
 
-/* ====== IA call (anti-spam + retry) ====== */
-async function getAIAction() {
-  if (getAIAction._inFlight) return getAIAction._inFlight;
+/* ====== IA call (anti-spam + retry + history) ====== */
+async function fetchAIAction() {
+  // anti double-clic: une requête à la fois
+  if (fetchAIAction._inFlight) return fetchAIAction._inFlight;
 
-  getAIAction._inFlight = (async () => {
+  fetchAIAction._inFlight = (async () => {
     const body = {
       goal: state.goal,
       category: state.category,
       time: state.time,
       energy: state.energy,
+      recent: (Array.isArray(state.history) ? state.history : []).slice(-6) // anti répétition
     };
 
+    // 1) appel normal
     let res = await fetch("/.netlify/functions/now", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     });
 
-    // Retry si rate-limit / temporaire
+    // 2) retry si rate limit / temporaire
     if (res.status === 429 || res.status === 503) {
       await new Promise(r => setTimeout(r, 900));
       res = await fetch("/.netlify/functions/now", {
@@ -157,6 +190,7 @@ async function getAIAction() {
     }
 
     const data = await res.json().catch(() => ({}));
+
     if (!res.ok) {
       const msg =
         data?.details?.error?.message ||
@@ -171,10 +205,36 @@ async function getAIAction() {
   })();
 
   try {
-    return await getAIAction._inFlight;
+    return await fetchAIAction._inFlight;
   } finally {
-    getAIAction._inFlight = null;
+    fetchAIAction._inFlight = null;
   }
+}
+
+/* ====== Cache (évite trop d’appels) ====== */
+function cacheKey() {
+  return JSON.stringify({
+    goal: state.goal.toLowerCase(),
+    category: state.category,
+    time: state.time,
+    energy: state.energy
+  });
+}
+
+function pullFromCache() {
+  const key = cacheKey();
+  const arr = state.cache[key];
+  if (Array.isArray(arr) && arr.length > 0) {
+    return arr.shift();
+  }
+  return null;
+}
+
+function pushToCache(action) {
+  const key = cacheKey();
+  if (!Array.isArray(state.cache[key])) state.cache[key] = [];
+  // on garde 3 max
+  if (state.cache[key].length < 3) state.cache[key].push(action);
 }
 
 /* ====== Generate action ====== */
@@ -189,12 +249,29 @@ async function generateAndShowAction({ forceDifferent = false } = {}) {
 
   const last = state.currentAction;
 
-  try {
-    let action = await getAIAction();
-
-    if (forceDifferent && last && action.toLowerCase() === last.toLowerCase()) {
-      action = await getAIAction();
+  // 1) cache first
+  let cached = pullFromCache();
+  if (cached) {
+    if (!forceDifferent || !last || cached.toLowerCase() !== last.toLowerCase()) {
+      state.currentAction = cached;
+      persist();
+      actionText.textContent = cached;
+      btnNewAction.disabled = false;
+      btnDone.disabled = false;
+      return;
     }
+  }
+
+  try {
+    let action = await fetchAIAction();
+
+    // évite doublon exact
+    if (forceDifferent && last && action.toLowerCase() === last.toLowerCase()) {
+      action = await fetchAIAction();
+    }
+
+    // alimente cache (petite réserve)
+    pushToCache(action);
 
     state.currentAction = action;
     persist();
@@ -205,7 +282,7 @@ async function generateAndShowAction({ forceDifferent = false } = {}) {
     persist();
     actionText.textContent = fb;
 
-    // Debug discret (utile si quota)
+    // debug discret: utile si quota / paiement
     actionMeta.textContent = `${CAT_LABEL[state.category] || state.category} • ${state.time} min • ${state.energy}  |  IA: ${String(e.message)}`;
   } finally {
     btnNewAction.disabled = false;
@@ -228,6 +305,7 @@ catButtons.forEach(btn => {
 
 btnCatNext.addEventListener("click", () => {
   if (!state.category) return;
+  refreshGoalSuggestions();
   showScreen(screenGoal);
 });
 
@@ -274,7 +352,10 @@ btnNext.addEventListener("click", async () => {
   await generateAndShowAction();
 });
 
-btnBackToGoal.addEventListener("click", () => showScreen(screenGoal));
+btnBackToGoal.addEventListener("click", () => {
+  refreshGoalSuggestions();
+  showScreen(screenGoal);
+});
 
 // Screen 4: Action
 btnDone.addEventListener("click", () => {
@@ -295,13 +376,11 @@ btnNewAction.addEventListener("click", async () => {
 });
 
 function resetAll() {
-  state = { category: "", goal: "", time: null, energy: "", currentAction: "", history: [] };
+  state = { category: "", goal: "", time: null, energy: "", currentAction: "", history: [], cache: {} };
   persist();
-
   goalInput.value = "";
   btnCatNext.disabled = true;
   btnNext.disabled = true;
-
   showScreen(screenCategory);
 }
 
@@ -335,9 +414,11 @@ function init() {
   updateContextNext();
   renderHistory();
 
-  // Start screen logic
   if (!state.category) return showScreen(screenCategory);
-  if (!state.goal) return showScreen(screenGoal);
+  if (!state.goal) {
+    refreshGoalSuggestions();
+    return showScreen(screenGoal);
+  }
   if (!(state.time && state.energy)) return showScreen(screenContext);
 
   if (state.currentAction) {
