@@ -13,9 +13,9 @@
       <p class="tagline">L’app qui te dit quoi faire maintenant.</p>
     </header>
 
-    <!-- ÉCRAN 1 : CATÉGORIE (d'abord) -->
+    <!-- ÉCRAN 1 : CATÉGORIE -->
     <section id="screen-category" class="screen">
-      <p class="subtagline">Choisis une catégorie (obligatoire).</p>
+      <p class="subtagline">Choisis une catégorie.</p>
 
       <div class="grid">
         <button class="btn option" type="button" data-cat="health">Santé & Sport</button>
@@ -29,18 +29,22 @@
       <button id="btnCatNext" class="btn primary" type="button" disabled>Continuer</button>
     </section>
 
-    <!-- ÉCRAN 2 : OBJECTIF (après catégorie) -->
+    <!-- ÉCRAN 2 : OBJECTIF -->
     <section id="screen-goal" class="screen hidden">
-      <label class="label" for="goalInput">Quel est ton objectif dans cette catégorie ?</label>
+      <label class="label" for="goalInput">Ton objectif (simple) :</label>
       <input
         id="goalInput"
         class="input"
         type="text"
-        placeholder="Ex : courir 2x/semaine, réviser 30 min/jour, trouver 5 prospects…"
+        placeholder="Ex : reprendre le sport, réviser, trouver des clients…"
         autocomplete="off"
       />
+
+      <!-- Suggestions dynamiques -->
+      <div id="goalSuggestions" class="chips"></div>
+
       <button id="btnContinue" class="btn primary" type="button">Continuer</button>
-      <p id="goalError" class="error hidden">Entre un objectif (même simple).</p>
+      <p id="goalError" class="error hidden">Entre un objectif (ou clique une suggestion).</p>
 
       <button id="btnGoalBack" class="btn ghost" type="button">← Modifier la catégorie</button>
     </section>
