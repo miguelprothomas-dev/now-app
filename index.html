@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NOW.</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="header">
+      <h1 class="logo">NOW<span class="dot">.</span></h1>
+      <p class="tagline">L’app qui te dit quoi faire maintenant.</p>
+    </header>
+
+    <!-- ÉCRAN 1 : OBJECTIF -->
+    <section id="screen-goal" class="screen">
+      <label class="label" for="goalInput">Quel est ton objectif ?</label>
+      <input
+        id="goalInput"
+        class="input"
+        type="text"
+        placeholder="Ex : être en forme, apprendre anglais, trouver des clients…"
+        autocomplete="off"
+      />
+      <button id="btnContinue" class="btn primary" type="button">Continuer</button>
+      <p id="goalError" class="error hidden">Entre un objectif (même simple).</p>
+    </section>
+
+    <!-- ÉCRAN 2 : CATÉGORIE (obligatoire) -->
+    <section id="screen-category" class="screen hidden">
+      <p class="subtagline">Choisis une catégorie (obligatoire).</p>
+
+      <div class="grid">
+        <button class="btn option" type="button" data-cat="health">Santé & Sport</button>
+        <button class="btn option" type="button" data-cat="study">Études & Apprentissage</button>
+        <button class="btn option" type="button" data-cat="work">Travail & Business</button>
+        <button class="btn option" type="button" data-cat="home">Maison & Organisation</button>
+        <button class="btn option" type="button" data-cat="creative">Créatif & Contenu</button>
+        <button class="btn option" type="button" data-cat="social">Social & Relations</button>
+      </div>
+
+      <button id="btnCatNext" class="btn primary" type="button" disabled>Continuer</button>
+      <button id="btnCatBack" class="btn ghost" type="button">← Retour</button>
+    </section>
+
+    <!-- ÉCRAN 3 : TEMPS + ÉNERGIE -->
+    <section id="screen-context" class="screen hidden">
+      <p class="subtagline">OK. Donne-moi ton contexte.</p>
+
+      <h2 class="h2">Temps dispo</h2>
+      <div class="row">
+        <button class="btn option" type="button" data-time="10">10 min</button>
+        <button class="btn option" type="button" data-time="20">20 min</button>
+        <button class="btn option" type="button" data-time="45">45 min</button>
+      </div>
+
+      <h2 class="h2">Énergie</h2>
+      <div class="row">
+        <button class="btn option" type="button" data-energy="fatigue">Fatigué</button>
+        <button class="btn option" type="button" data-energy="normal">Normal</button>
+        <button class="btn option" type="button" data-energy="motive">Motivé</button>
+      </div>
+
+      <button id="btnNext" class="btn primary" type="button" disabled>Continuer</button>
+      <p id="contextError" class="error hidden">Choisis le temps ET l’énergie.</p>
+
+      <button id="btnBackToCategory" class="btn ghost" type="button">← Modifier la catégorie</button>
+    </section>
+
+    <!-- ÉCRAN 4 : ACTION -->
+    <section id="screen-action" class="screen hidden">
+      <h2 class="h2 big">FAIS ÇA MAINTENANT :</h2>
+
+      <div id="actionMeta" class="meta"></div>
+      <div id="actionText" class="actionCard">Action ici</div>
+
+      <button id="btnDone" class="btn primary" type="button">Je l’ai fait</button>
+      <button id="btnNewAction" class="btn secondary" type="button">Donne-moi une autre action</button>
+      <button id="btnReset" class="btn ghost" type="button">Reset</button>
+    </section>
+
+    <!-- ÉCRAN 5 : DONE + HISTORIQUE -->
+    <section id="screen-done" class="screen hidden">
+      <div class="done">
+        <div class="spark">✅</div>
+        <h2 class="h2 big" style="margin-top:10px;">Bien joué.</h2>
+        <p class="subtagline" id="doneText">Action terminée.</p>
+      </div>
+
+      <div class="history">
+        <h3 class="h3">Historique (local)</h3>
+        <ul id="historyList" class="historyList"></ul>
+      </div>
+
+      <button id="btnNextNow" class="btn primary" type="button">Action suivante</button>
+      <button id="btnReset2" class="btn ghost" type="button">Reset</button>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
