@@ -206,3 +206,8 @@ body{
   margin-top:4px;
   font-size:12px;
 }
+
+.chips { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 6px; }
+.chip { border:1px solid rgba(255,255,255,.18); padding:8px 10px; border-radius:999px; background:transparent; cursor:pointer; }
+.chip:hover { opacity:.9; }
+.selected { outline: 2px solid rgba(255,255,255,.35); }
