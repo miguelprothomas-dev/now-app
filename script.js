@@ -1,5 +1,7 @@
 /* ======================
-   NOW 2.0 — SCRIPT COMPLET (compatible avec TON index.html)
+   NOW 2.0 — Option A
+   Flow: Category -> Goal -> Context -> Action -> Done
+   IA via /.netlify/functions/now (POST)
 ====================== */
 
 const $ = (id) => document.getElementById(id);
@@ -15,34 +17,34 @@ const load = (k, fallback = null) => {
 };
 
 /* ====== Screens ====== */
-const screenGoal = $("screen-goal");
 const screenCategory = $("screen-category");
+const screenGoal = $("screen-goal");
 const screenContext = $("screen-context");
 const screenAction = $("screen-action");
 const screenDone = $("screen-done");
 
-/* ====== Screen 1 ====== */
+/* ====== Screen 1: Category ====== */
+const btnCatNext = $("btnCatNext");
+
+/* ====== Screen 2: Goal ====== */
 const goalInput = $("goalInput");
 const btnContinue = $("btnContinue");
 const goalError = $("goalError");
+const btnGoalBack = $("btnGoalBack");
 
-/* ====== Screen 2 ====== */
-const btnCatNext = $("btnCatNext");
-const btnCatBack = $("btnCatBack");
-
-/* ====== Screen 3 ====== */
+/* ====== Screen 3: Context ====== */
 const btnNext = $("btnNext");
 const contextError = $("contextError");
-const btnBackToCategory = $("btnBackToCategory");
+const btnBackToGoal = $("btnBackToGoal");
 
-/* ====== Screen 4 ====== */
+/* ====== Screen 4: Action ====== */
 const actionMeta = $("actionMeta");
 const actionText = $("actionText");
 const btnDone = $("btnDone");
 const btnNewAction = $("btnNewAction");
 const btnReset = $("btnReset");
 
-/* ====== Screen 5 ====== */
+/* ====== Screen 5: Done ====== */
 const doneText = $("doneText");
 const historyList = $("historyList");
 const btnNextNow = $("btnNextNow");
@@ -50,8 +52,8 @@ const btnReset2 = $("btnReset2");
 
 /* ====== Storage keys ====== */
 const K = {
-  goal: "now_goal",
   category: "now_category",
+  goal: "now_goal",
   time: "now_time",
   energy: "now_energy",
   currentAction: "now_current_action",
@@ -59,17 +61,17 @@ const K = {
 };
 
 let state = {
-  goal: load(K.goal, ""),
   category: load(K.category, ""),
+  goal: load(K.goal, ""),
   time: load(K.time, null),      // number
-  energy: load(K.energy, ""),    // "fatigue" | "normal" | "motive"
+  energy: load(K.energy, ""),    // fatigue | normal | motive
   currentAction: load(K.currentAction, ""),
   history: load(K.history, []),
 };
 
 function persist() {
-  save(K.goal, state.goal);
   save(K.category, state.category);
+  save(K.goal, state.goal);
   save(K.time, state.time);
   save(K.energy, state.energy);
   save(K.currentAction, state.currentAction);
@@ -78,7 +80,7 @@ function persist() {
 
 /* ====== UI helpers ====== */
 function showScreen(s) {
-  [screenGoal, screenCategory, screenContext, screenAction, screenDone].forEach(x => x.classList.add("hidden"));
+  [screenCategory, screenGoal, screenContext, screenAction, screenDone].forEach(x => x.classList.add("hidden"));
   s.classList.remove("hidden");
 }
 
@@ -126,29 +128,53 @@ function fallbackAction() {
   return `Avance sur "${state.goal}" pendant ${state.time} minutes, sans distraction.`;
 }
 
-/* ====== IA call ====== */
+/* ====== IA call (anti-spam + retry) ====== */
 async function getAIAction() {
-  const res = await fetch("/.netlify/functions/now", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  if (getAIAction._inFlight) return getAIAction._inFlight;
+
+  getAIAction._inFlight = (async () => {
+    const body = {
       goal: state.goal,
       category: state.category,
       time: state.time,
       energy: state.energy,
-    })
-  });
+    };
 
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    // on remonte une erreur lisible (si quota/clé manquante, etc.)
-    const msg = data?.error || data?.details?.error?.message || `HTTP ${res.status}`;
-    throw new Error(msg);
+    let res = await fetch("/.netlify/functions/now", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+
+    // Retry si rate-limit / temporaire
+    if (res.status === 429 || res.status === 503) {
+      await new Promise(r => setTimeout(r, 900));
+      res = await fetch("/.netlify/functions/now", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+    }
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg =
+        data?.details?.error?.message ||
+        data?.error ||
+        `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+
+    const action = String(data.action || "").trim();
+    if (!action) throw new Error("Empty AI action");
+    return action;
+  })();
+
+  try {
+    return await getAIAction._inFlight;
+  } finally {
+    getAIAction._inFlight = null;
   }
-
-  const action = String(data.action || "").trim();
-  if (!action) throw new Error("Empty AI action");
-  return action;
 }
 
 /* ====== Generate action ====== */
@@ -156,7 +182,6 @@ async function generateAndShowAction({ forceDifferent = false } = {}) {
   actionMeta.textContent = `${CAT_LABEL[state.category] || state.category} • ${state.time} min • ${state.energy}`;
   actionText.textContent = "Je réfléchis…";
 
-  // désactive boutons pendant le chargement
   btnNewAction.disabled = true;
   btnDone.disabled = true;
 
@@ -167,23 +192,20 @@ async function generateAndShowAction({ forceDifferent = false } = {}) {
   try {
     let action = await getAIAction();
 
-    // si l’utilisateur veut une autre action, on évite le doublon exact
     if (forceDifferent && last && action.toLowerCase() === last.toLowerCase()) {
       action = await getAIAction();
     }
 
     state.currentAction = action;
     persist();
-
     actionText.textContent = action;
   } catch (e) {
-    // fallback
     const fb = fallbackAction();
     state.currentAction = fb;
     persist();
     actionText.textContent = fb;
 
-    // affiche l'erreur en petit dans meta (utile pour debug)
+    // Debug discret (utile si quota)
     actionMeta.textContent = `${CAT_LABEL[state.category] || state.category} • ${state.time} min • ${state.energy}  |  IA: ${String(e.message)}`;
   } finally {
     btnNewAction.disabled = false;
@@ -191,22 +213,9 @@ async function generateAndShowAction({ forceDifferent = false } = {}) {
   }
 }
 
-/* ====== Buttons bindings ====== */
+/* ====== Bindings ====== */
 
-// Screen 1
-btnContinue.addEventListener("click", () => {
-  const g = (goalInput.value || "").trim();
-  if (!g) return setGoalError(true);
-
-  setGoalError(false);
-  state.goal = g;
-  persist();
-
-  updateCatNext();
-  showScreen(screenCategory);
-});
-
-// Screen 2
+// Screen 1: Category
 const catButtons = Array.from(document.querySelectorAll("[data-cat]"));
 catButtons.forEach(btn => {
   btn.addEventListener("click", () => {
@@ -219,12 +228,24 @@ catButtons.forEach(btn => {
 
 btnCatNext.addEventListener("click", () => {
   if (!state.category) return;
+  showScreen(screenGoal);
+});
+
+// Screen 2: Goal
+btnContinue.addEventListener("click", () => {
+  const g = (goalInput.value || "").trim();
+  if (!g) return setGoalError(true);
+
+  setGoalError(false);
+  state.goal = g;
+  persist();
+
   showScreen(screenContext);
 });
 
-btnCatBack.addEventListener("click", () => showScreen(screenGoal));
+btnGoalBack.addEventListener("click", () => showScreen(screenCategory));
 
-// Screen 3
+// Screen 3: Context
 const timeButtons = Array.from(document.querySelectorAll("[data-time]"));
 timeButtons.forEach(btn => {
   btn.addEventListener("click", () => {
@@ -253,9 +274,9 @@ btnNext.addEventListener("click", async () => {
   await generateAndShowAction();
 });
 
-btnBackToCategory.addEventListener("click", () => showScreen(screenCategory));
+btnBackToGoal.addEventListener("click", () => showScreen(screenGoal));
 
-// Screen 4
+// Screen 4: Action
 btnDone.addEventListener("click", () => {
   const a = String(state.currentAction || "").trim();
   if (a) {
@@ -274,24 +295,26 @@ btnNewAction.addEventListener("click", async () => {
 });
 
 function resetAll() {
-  state = { goal: "", category: "", time: null, energy: "", currentAction: "", history: [] };
+  state = { category: "", goal: "", time: null, energy: "", currentAction: "", history: [] };
   persist();
+
   goalInput.value = "";
   btnCatNext.disabled = true;
   btnNext.disabled = true;
-  showScreen(screenGoal);
+
+  showScreen(screenCategory);
 }
 
 btnReset.addEventListener("click", resetAll);
 
-// Screen 5
+// Screen 5: Done
 btnNextNow.addEventListener("click", async () => {
   await generateAndShowAction({ forceDifferent: true });
 });
 
 btnReset2.addEventListener("click", resetAll);
 
-/* ====== Init restore ====== */
+/* ====== Init ====== */
 function init() {
   goalInput.value = state.goal || "";
 
@@ -312,8 +335,9 @@ function init() {
   updateContextNext();
   renderHistory();
 
-  if (!state.goal) return showScreen(screenGoal);
+  // Start screen logic
   if (!state.category) return showScreen(screenCategory);
+  if (!state.goal) return showScreen(screenGoal);
   if (!(state.time && state.energy)) return showScreen(screenContext);
 
   if (state.currentAction) {
