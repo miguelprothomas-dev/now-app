@@ -6,27 +6,17 @@ export async function handler(event) {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
 
-  // Preflight CORS
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers, body: "" };
   }
 
-  // On veut uniquement POST
   if (event.httpMethod !== "POST") {
-    return {
-      statusCode: 405,
-      headers,
-      body: JSON.stringify({ error: "Use POST on /.netlify/functions/now" }),
-    };
+    return { statusCode: 405, headers, body: JSON.stringify({ error: "Use POST" }) };
   }
 
   try {
     if (!process.env.OPENAI_API_KEY) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: "OPENAI_API_KEY missing in Netlify env vars" }),
-      };
+      return { statusCode: 500, headers, body: JSON.stringify({ error: "OPENAI_API_KEY missing in Netlify env vars" }) };
     }
 
     const payload = JSON.parse(event.body || "{}");
@@ -34,35 +24,39 @@ export async function handler(event) {
     const category = String(payload.category || "").trim();
     const time = Number(payload.time);
     const energy = String(payload.energy || "").trim();
+    const recent = Array.isArray(payload.recent) ? payload.recent.slice(-6) : [];
 
     if (!goal || !category || !time || !energy) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({
-          error: "Missing fields (goal, category, time, energy)",
-          received: { goal, category, time, energy },
-        }),
+        body: JSON.stringify({ error: "Missing fields (goal, category, time, energy)" }),
       };
     }
 
-    // Prompt ULTRA cadré (NOW.)
-    const prompt = `
-Tu es NOW. 2.0.
-Objectif: donner UNE seule action faisable MAINTENANT.
+    const recentTxt = recent.length ? recent.map(a => `- ${a}`).join("\n") : "Aucun.";
 
-Contraintes:
-- Une seule phrase impérative
-- Pas de liste, pas d'explication
-- Max 18 mots
-- Adaptée au temps dispo et à l'énergie
-- Très concrète (une action réelle)
+    const prompt = `
+Tu es NOW. 2.0 (coach d’exécution).
+But: proposer UNE seule action faisable MAINTENANT.
+
+Règles STRICTES:
+- 1 seule phrase impérative
+- pas de liste, pas d'explication
+- max 18 mots
+- action concrète, immédiatement faisable
+- respecte le temps dispo
+- adapte au niveau d'énergie
+- ne répète PAS une action déjà faite si possible
+
+Historique récent (à ne pas répéter):
+${recentTxt}
 
 Contexte:
-- Objectif utilisateur: ${goal}
-- Catégorie: ${category}
-- Temps dispo: ${time} minutes
-- Énergie: ${energy}
+Objectif: ${goal}
+Catégorie: ${category}
+Temps: ${time} minutes
+Énergie: ${energy}
 
 Réponds uniquement par l'action.
 `.trim();
@@ -76,51 +70,29 @@ Réponds uniquement par l'action.
       body: JSON.stringify({
         model: "gpt-4.1-mini",
         input: prompt,
-        temperature: 0.7,
+        temperature: 0.75,
         max_output_tokens: 80,
       }),
     });
 
     const data = await resp.json();
-
-    // Récupère le texte
-    const text =
-      data.output_text ||
-      (data.output?.[0]?.content?.[0]?.text) ||
-      "";
+    const text = data.output_text || (data.output?.[0]?.content?.[0]?.text) || "";
 
     if (!resp.ok) {
-      // renvoie l'erreur OpenAI telle quelle (utile si quota/clé)
       return {
         statusCode: resp.status,
         headers,
-        body: JSON.stringify({
-          error: "OpenAI error",
-          status: resp.status,
-          details: data,
-        }),
+        body: JSON.stringify({ error: "OpenAI error", status: resp.status, details: data }),
       };
     }
 
     const action = String(text).trim();
     if (!action) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: "Empty AI response", details: data }),
-      };
+      return { statusCode: 500, headers, body: JSON.stringify({ error: "Empty AI response" }) };
     }
 
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({ action }),
-    };
+    return { statusCode: 200, headers, body: JSON.stringify({ action }) };
   } catch (err) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: "Server error", details: String(err) }),
-    };
+    return { statusCode: 500, headers, body: JSON.stringify({ error: "Server error", details: String(err) }) };
   }
 }
