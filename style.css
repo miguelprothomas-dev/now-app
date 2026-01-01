@@ -207,7 +207,41 @@ body{
   font-size:12px;
 }
 
-.chips { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 6px; }
-.chip { border:1px solid rgba(255,255,255,.18); padding:8px 10px; border-radius:999px; background:transparent; cursor:pointer; }
-.chip:hover { opacity:.9; }
-.selected { outline: 2px solid rgba(255,255,255,.35); }
+/* Suggestions (chips) — lisibles en thème sombre */
+.chips{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin:12px 0 6px;
+}
+
+.chip{
+  color: #fff;                 /* ✅ texte blanc */
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.18);
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.chip:hover{
+  background: rgba(255,255,255,.12);
+}
+
+.chip:active{
+  transform: scale(0.98);
+}
+
+/* Si ton app est en thème clair, adapte vite fait */
+@media (prefers-color-scheme: light){
+  .chip{
+    color:#111;
+    background: rgba(0,0,0,.06);
+    border: 1px solid rgba(0,0,0,.12);
+  }
+  .chip:hover{
+    background: rgba(0,0,0,.08);
+  }
+}
